@@ -9,6 +9,7 @@ import argparse
 import os
 import time
 from decimal import Decimal
+from datetime import datetime
 
 import mido
 import tensorflow as tf
@@ -67,12 +68,12 @@ def generate(unused_argv):
   sequence = generator.generate(primer_sequence, generator_options)
 
   # Outputs the plot
-  os.makedirs("output", exist_ok=True)
-  plot_file = os.path.join("output", "out.html")
-  pretty_midi = midi_io.note_sequence_to_pretty_midi(sequence)
-  plotter = Plotter(live_reload=True)
-  plotter.show(pretty_midi, plot_file)
-  print(f"Generated plot file: {os.path.abspath(plot_file)}")
+  # os.makedirs("output", exist_ok=True)
+  # plot_file = os.path.join("output", "out.html")
+  # pretty_midi = midi_io.note_sequence_to_pretty_midi(sequence)
+  # plotter = Plotter(live_reload=True)
+  # plotter.show(pretty_midi, plot_file)
+  # print(f"Generated plot file: {os.path.abspath(plot_file)}")
 
   # We find the proper input port for the software synth
   # (which is the output port for Magenta)
@@ -99,7 +100,6 @@ def generate(unused_argv):
   period = Decimal(240) / qpm
   period = period * (num_bars + 1)
   sleeper = concurrency.Sleeper()
-  index = 0
   while True:
     try:
       # We get the next tick time by using the period
@@ -119,11 +119,10 @@ def generate(unused_argv):
                              start_time=float(tick_time))
 
       # Generate a new sequence based on the previous sequence
-      index = index + 1
       generator_options = generator_pb2.GeneratorOptions()
-      generator_options.args['temperature'].float_value = 1
-      generation_start_time = index * period
-      generation_end_time = generation_start_time + period
+      generator_options.args['temperature'].float_value = 1.3
+      generation_start_time = float(period)
+      generation_end_time = 2 * float(period)
       generator_options.generate_sections.add(
         start_time=generation_start_time,
         end_time=generation_end_time)
@@ -131,12 +130,22 @@ def generate(unused_argv):
       sequence = trim_note_sequence(sequence,
                                     generation_start_time,
                                     generation_end_time)
+      sequence = adjust_sequence_times(sequence, -float(period))
 
       # Sleep until the next tick time
       sleeper.sleep_until(float(tick_time_next))
     except KeyboardInterrupt:
       print(f"Stopping")
       return 0
+
+
+def print_sequence_info(sequence):
+  start = sequence.notes[0].start_time
+  end = sequence.notes[-1].end_time
+  if (start > 100000):
+    start = datetime.fromtimestamp(start)
+    end = datetime.fromtimestamp(end)
+  print(f"sequence start: {start}, end: {end}")
 
 
 if __name__ == "__main__":
